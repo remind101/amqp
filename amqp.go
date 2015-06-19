@@ -24,6 +24,16 @@ var (
 		AutoDelete: false,
 		RoutingKey: "",
 	}
+
+	ErrClosed          = amqp.ErrClosed
+	ErrSASL            = amqp.ErrSASL
+	ErrCredentials     = amqp.ErrCredentials
+	ErrVhost           = amqp.ErrVhost
+	ErrSyntax          = amqp.ErrSyntax
+	ErrFrame           = amqp.ErrFrame
+	ErrCommandInvalid  = amqp.ErrCommandInvalid
+	ErrUnexpectedFrame = amqp.ErrUnexpectedFrame
+	ErrFieldType       = amqp.ErrFieldType
 )
 
 // ExchangeOptions can be passed to NewExchange to configure the Exchange.
