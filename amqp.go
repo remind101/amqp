@@ -137,13 +137,14 @@ func (e *Exchange) Close() error {
 
 // Queue represents an amqp queue.
 type Queue struct {
-	exchange   *Exchange
-	routingKey string
-	name       string
+	exchange     *Exchange
+	routingKey   string
+	name         string
+	onDisconnect func() bool
 }
 
 // NewQueue returns a new Queue instance.
-func NewQueue(queue string, exchange *Exchange, options *QueueOptions) (*Queue, error) {
+func NewQueue(queue string, exchange *Exchange, options *QueueOptions, onDisconnect func() bool) (*Queue, error) {
 	if options == nil {
 		options = DefaultQueueOptions
 	}
@@ -161,9 +162,10 @@ func NewQueue(queue string, exchange *Exchange, options *QueueOptions) (*Queue, 
 	}
 
 	return &Queue{
-		exchange:   exchange,
-		routingKey: options.RoutingKey,
-		name:       queue,
+		exchange:     exchange,
+		routingKey:   options.RoutingKey,
+		name:         queue,
+		onDisconnect: onDisconnect,
 	}, nil
 }
 
@@ -181,7 +183,7 @@ func (q *Queue) Name() string {
 // Subscribe starts consuming from the queue.
 // If the connection is lost then onDisconnect is called. onDisconnect returns whether or not to
 // continue processing.
-func (q *Queue) Subscribe(messages chan<- *Message, onDisconnect func() bool) error {
+func (q *Queue) Subscribe(messages chan<- *Message) error {
 	if err := q.bind(); err != nil {
 		return err
 	}
@@ -204,7 +206,7 @@ func (q *Queue) Subscribe(messages chan<- *Message, onDisconnect func() bool) er
 			select {
 			case d := <-dd:
 				if d.Acknowledger == nil {
-					if onDisconnect() {
+					if q.onDisconnect() {
 						break
 					} else {
 						return
