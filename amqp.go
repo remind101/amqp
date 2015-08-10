@@ -179,7 +179,9 @@ func (q *Queue) Name() string {
 }
 
 // Subscribe starts consuming from the queue.
-func (q *Queue) Subscribe(messages chan<- *Message) error {
+// If the connection is lost then onDisconnect is called. onDisconnect returns whether or not to
+// continue processing.
+func (q *Queue) Subscribe(messages chan<- *Message, onDisconnect func() bool) error {
 	if err := q.bind(); err != nil {
 		return err
 	}
@@ -201,6 +203,13 @@ func (q *Queue) Subscribe(messages chan<- *Message) error {
 		for {
 			select {
 			case d := <-dd:
+				if d.Acknowledger == nil {
+					if onDisconnect() {
+						break
+					} else {
+						return
+					}
+				}
 				m := &Message{
 					Acknowledger: &acknowledger{
 						Acknowledger: d.Acknowledger,
