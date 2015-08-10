@@ -16,6 +16,10 @@ var (
 		Type:       "topic",
 		Durable:    true,
 		AutoDelete: false,
+		OnDisconnect: func() bool {
+			panic("Lost connection")
+			return false
+		},
 	}
 
 	// DefaultQueueOptions are the default options used when building a new Queue.
@@ -37,11 +41,14 @@ var (
 )
 
 // ExchangeOptions can be passed to NewExchange to configure the Exchange.
+// If the connection is lost then OnDisconnect is called. OnDisconnect returns whether or not to
+// continue processing.
 type ExchangeOptions struct {
-	Name       string
-	Type       string
-	Durable    bool
-	AutoDelete bool
+	Name         string
+	Type         string
+	Durable      bool
+	AutoDelete   bool
+	OnDisconnect func() bool
 }
 
 // QueueOptions can be passed to NewQueue to configure the queue.
@@ -54,9 +61,10 @@ type QueueOptions struct {
 // Exchange represents an amqp exchange and wraps an amqp.Connection
 // and an amqp.Channel.
 type Exchange struct {
-	Name       string
-	connection *amqp.Connection
-	channel    *amqp.Channel
+	Name         string
+	connection   *amqp.Connection
+	channel      *amqp.Channel
+	onDisconnect func() bool
 }
 
 // NewExchange connects to rabbitmq, opens a channel and returns a new
@@ -81,6 +89,12 @@ func NewExchange(url string, options *ExchangeOptions) (*Exchange, error) {
 		return nil, err
 	}
 
+	if options.OnDisconnect == nil {
+		options.OnDisconnect = func() bool {
+			panic("RabbitMQ Disconnected")
+		}
+	}
+
 	err = ch.ExchangeDeclare(
 		options.Name,       // name
 		options.Type,       // kind
@@ -95,9 +109,10 @@ func NewExchange(url string, options *ExchangeOptions) (*Exchange, error) {
 	}
 
 	return &Exchange{
-		Name:       options.Name,
-		connection: c,
-		channel:    ch,
+		Name:         options.Name,
+		connection:   c,
+		channel:      ch,
+		onDisconnect: options.OnDisconnect,
 	}, nil
 }
 
@@ -137,14 +152,13 @@ func (e *Exchange) Close() error {
 
 // Queue represents an amqp queue.
 type Queue struct {
-	exchange     *Exchange
-	routingKey   string
-	name         string
-	onDisconnect func() bool
+	exchange   *Exchange
+	routingKey string
+	name       string
 }
 
 // NewQueue returns a new Queue instance.
-func NewQueue(queue string, exchange *Exchange, options *QueueOptions, onDisconnect func() bool) (*Queue, error) {
+func NewQueue(queue string, exchange *Exchange, options *QueueOptions) (*Queue, error) {
 	if options == nil {
 		options = DefaultQueueOptions
 	}
@@ -162,10 +176,9 @@ func NewQueue(queue string, exchange *Exchange, options *QueueOptions, onDisconn
 	}
 
 	return &Queue{
-		exchange:     exchange,
-		routingKey:   options.RoutingKey,
-		name:         queue,
-		onDisconnect: onDisconnect,
+		exchange:   exchange,
+		routingKey: options.RoutingKey,
+		name:       queue,
 	}, nil
 }
 
@@ -181,8 +194,6 @@ func (q *Queue) Name() string {
 }
 
 // Subscribe starts consuming from the queue.
-// If the connection is lost then onDisconnect is called. onDisconnect returns whether or not to
-// continue processing.
 func (q *Queue) Subscribe(messages chan<- *Message) error {
 	if err := q.bind(); err != nil {
 		return err
@@ -206,7 +217,7 @@ func (q *Queue) Subscribe(messages chan<- *Message) error {
 			select {
 			case d := <-dd:
 				if d.Acknowledger == nil {
-					if q.onDisconnect() {
+					if q.exchange.onDisconnect() {
 						break
 					} else {
 						return
