@@ -103,6 +103,10 @@ func NewExchange(url string, options *ExchangeOptions) (*Exchange, error) {
 
 // Publish publishes a message to the Exchange.
 func (e *Exchange) Publish(routingKey, message, requestID string) error {
+	if e.channel == nil {
+		return errors.New("channel is nil")
+	}
+
 	msg := amqp.Publishing{
 		Headers: amqp.Table{
 			"request_id": requestID,
