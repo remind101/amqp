@@ -10,16 +10,19 @@ var (
 	// DefaultURL is the default amqp url to connect to.
 	DefaultURL = "amqp://localhost"
 
+	// DefaultOnDisconnect is the default callback for when AMQP gets disconnected.
+	DefaultOnDisconnect = func() bool {
+		panic("Lost connection")
+		return false
+	}
+
 	// DefaultExchangeOptions are the default options used when building a new Exchange.
 	DefaultExchangeOptions = &ExchangeOptions{
-		Name:       "hutch",
-		Type:       "topic",
-		Durable:    true,
-		AutoDelete: false,
-		OnDisconnect: func() bool {
-			panic("Lost connection")
-			return false
-		},
+		Name:         "hutch",
+		Type:         "topic",
+		Durable:      true,
+		AutoDelete:   false,
+		OnDisconnect: DefaultOnDisconnect,
 	}
 
 	// DefaultQueueOptions are the default options used when building a new Queue.
@@ -90,9 +93,7 @@ func NewExchange(url string, options *ExchangeOptions) (*Exchange, error) {
 	}
 
 	if options.OnDisconnect == nil {
-		options.OnDisconnect = func() bool {
-			panic("RabbitMQ Disconnected")
-		}
+		options.OnDisconnect = DefaultOnDisconnect
 	}
 
 	err = ch.ExchangeDeclare(
