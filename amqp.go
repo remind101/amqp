@@ -10,12 +10,19 @@ var (
 	// DefaultURL is the default amqp url to connect to.
 	DefaultURL = "amqp://localhost"
 
+	// DefaultOnDisconnect is the default callback for when AMQP gets disconnected.
+	DefaultOnDisconnect = func() bool {
+		panic("Lost connection")
+		return false
+	}
+
 	// DefaultExchangeOptions are the default options used when building a new Exchange.
 	DefaultExchangeOptions = &ExchangeOptions{
-		Name:       "hutch",
-		Type:       "topic",
-		Durable:    true,
-		AutoDelete: false,
+		Name:         "hutch",
+		Type:         "topic",
+		Durable:      true,
+		AutoDelete:   false,
+		OnDisconnect: DefaultOnDisconnect,
 	}
 
 	// DefaultQueueOptions are the default options used when building a new Queue.
@@ -37,11 +44,14 @@ var (
 )
 
 // ExchangeOptions can be passed to NewExchange to configure the Exchange.
+// If the connection is lost then OnDisconnect is called. OnDisconnect returns whether or not to
+// continue processing.
 type ExchangeOptions struct {
-	Name       string
-	Type       string
-	Durable    bool
-	AutoDelete bool
+	Name         string
+	Type         string
+	Durable      bool
+	AutoDelete   bool
+	OnDisconnect func() bool
 }
 
 // QueueOptions can be passed to NewQueue to configure the queue.
@@ -54,9 +64,10 @@ type QueueOptions struct {
 // Exchange represents an amqp exchange and wraps an amqp.Connection
 // and an amqp.Channel.
 type Exchange struct {
-	Name       string
-	connection *amqp.Connection
-	channel    *amqp.Channel
+	Name         string
+	connection   *amqp.Connection
+	channel      *amqp.Channel
+	onDisconnect func() bool
 }
 
 // NewExchange connects to rabbitmq, opens a channel and returns a new
@@ -81,6 +92,10 @@ func NewExchange(url string, options *ExchangeOptions) (*Exchange, error) {
 		return nil, err
 	}
 
+	if options.OnDisconnect == nil {
+		options.OnDisconnect = DefaultOnDisconnect
+	}
+
 	err = ch.ExchangeDeclare(
 		options.Name,       // name
 		options.Type,       // kind
@@ -95,9 +110,10 @@ func NewExchange(url string, options *ExchangeOptions) (*Exchange, error) {
 	}
 
 	return &Exchange{
-		Name:       options.Name,
-		connection: c,
-		channel:    ch,
+		Name:         options.Name,
+		connection:   c,
+		channel:      ch,
+		onDisconnect: options.OnDisconnect,
 	}, nil
 }
 
@@ -201,6 +217,13 @@ func (q *Queue) Subscribe(messages chan<- *Message) error {
 		for {
 			select {
 			case d := <-dd:
+				if d.Acknowledger == nil {
+					if q.exchange.onDisconnect() {
+						break
+					} else {
+						return
+					}
+				}
 				m := &Message{
 					Acknowledger: &acknowledger{
 						Acknowledger: d.Acknowledger,
