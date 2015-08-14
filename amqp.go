@@ -56,9 +56,11 @@ type ExchangeOptions struct {
 
 // QueueOptions can be passed to NewQueue to configure the queue.
 type QueueOptions struct {
-	Durable    bool
-	AutoDelete bool
-	RoutingKey string
+	Durable       bool
+	AutoDelete    bool
+	RoutingKey    string
+	PrefetchCount int
+	PrefetchSize  int
 }
 
 // Exchange represents an amqp exchange and wraps an amqp.Connection
@@ -159,13 +161,13 @@ type Queue struct {
 }
 
 // NewQueue returns a new Queue instance.
-func NewQueue(queue string, exchange *Exchange, options *QueueOptions) (*Queue, error) {
+func NewQueue(queueName string, exchange *Exchange, options *QueueOptions) (*Queue, error) {
 	if options == nil {
 		options = DefaultQueueOptions
 	}
 
 	_, err := exchange.channel.QueueDeclare(
-		queue,              // name
+		queueName,          // name
 		options.Durable,    // durable
 		options.AutoDelete, // autoDelete
 		false,              // exclusive
@@ -176,10 +178,17 @@ func NewQueue(queue string, exchange *Exchange, options *QueueOptions) (*Queue, 
 		return nil, err
 	}
 
+	if options.PrefetchCount > 0 || options.PrefetchSize > 0 {
+		err = exchange.channel.Qos(options.PrefetchCount, options.PrefetchSize, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &Queue{
 		exchange:   exchange,
 		routingKey: options.RoutingKey,
-		name:       queue,
+		name:       queueName,
 	}, nil
 }
 
