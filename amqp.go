@@ -223,28 +223,19 @@ func (q *Queue) Subscribe(messages chan<- *Message) error {
 	}
 
 	go func() {
-		open := true
-		for open {
-			select {
-			case d, ok := <-dd:
-				if !ok {
-					q.exchange.onDisconnect()
-					open = false
-					break
-				}
-
-				m := &Message{
-					Acknowledger: &acknowledger{
-						Acknowledger: d.Acknowledger,
-						deliveryTag:  d.DeliveryTag,
-					},
-					Headers: d.Headers,
-					Body:    d.Body,
-				}
-
-				messages <- m
+		for d := range dd {
+			messages <- &Message{
+				Acknowledger: &acknowledger{
+					Acknowledger: d.Acknowledger,
+					deliveryTag:  d.DeliveryTag,
+				},
+				Headers: d.Headers,
+				Body:    d.Body,
 			}
 		}
+
+		// If we got here, the channel was closed.
+		q.exchange.onDisconnect()
 	}()
 
 	return nil
