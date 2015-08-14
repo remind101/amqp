@@ -223,16 +223,16 @@ func (q *Queue) Subscribe(messages chan<- *Message) error {
 	}
 
 	go func() {
-		for {
+		open := true
+		for open {
 			select {
-			case d := <-dd:
-				if d.Acknowledger == nil {
-					if q.exchange.onDisconnect() {
-						break
-					} else {
-						return
-					}
+			case d, ok := <-dd:
+				if !ok {
+					q.exchange.onDisconnect()
+					open = false
+					break
 				}
+
 				m := &Message{
 					Acknowledger: &acknowledger{
 						Acknowledger: d.Acknowledger,
