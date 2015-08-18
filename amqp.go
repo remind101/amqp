@@ -11,9 +11,8 @@ var (
 	DefaultURL = "amqp://localhost"
 
 	// DefaultOnDisconnect is the default callback for when AMQP gets disconnected.
-	DefaultOnDisconnect = func() bool {
+	DefaultOnDisconnect = func() {
 		panic("Lost connection")
-		return false
 	}
 
 	// DefaultExchangeOptions are the default options used when building a new Exchange.
@@ -51,7 +50,7 @@ type ExchangeOptions struct {
 	Type         string
 	Durable      bool
 	AutoDelete   bool
-	OnDisconnect func() bool
+	OnDisconnect func()
 }
 
 // QueueOptions can be passed to NewQueue to configure the queue.
@@ -69,7 +68,7 @@ type Exchange struct {
 	Name         string
 	connection   *amqp.Connection
 	channel      *amqp.Channel
-	onDisconnect func() bool
+	onDisconnect func()
 }
 
 // NewExchange connects to rabbitmq, opens a channel and returns a new
