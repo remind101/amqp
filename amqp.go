@@ -118,8 +118,17 @@ func NewExchange(url string, options *ExchangeOptions) (*Exchange, error) {
 	}, nil
 }
 
-// Publish publishes a message to the Exchange.
+// Publish publishes a persistent message to the Exchange.
 func (e *Exchange) Publish(routingKey, message, requestID string) error {
+	return e.publish(routingKey, message, requestID, amqp.Persistent)
+}
+
+// PublishTransient publishes a transient message to the Exchange.
+func (e *Exchange) PublishTransient(routingKey, message, requestID string) error {
+	return e.publish(routingKey, message, requestID, amqp.Transient)
+}
+
+func (e *Exchange) publish(routingKey, message, requestID string, deliveryMode uint8) error {
 	if e.channel == nil {
 		return errors.New("channel is nil")
 	}
@@ -130,7 +139,7 @@ func (e *Exchange) Publish(routingKey, message, requestID string) error {
 		},
 		ContentType:  "application/json",
 		Body:         []byte(message),
-		DeliveryMode: amqp.Persistent,
+		DeliveryMode: deliveryMode,
 		Priority:     0,
 	}
 
